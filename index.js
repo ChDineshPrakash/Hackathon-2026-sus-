@@ -69,6 +69,9 @@ app.post('/api/alerts', async (req, res) => {
     }
   }
 
+  if (email.header && !email.subject) email.subject = email.header;
+  if (email.sender && !email.from) email.from = email.sender;
+
   // AI Insights
   email.aiReasoning = email.aiReasoning || "AI analyzed context for priority detection.";
   email.summary = email.summary || email.snippet || "No summary provided.";

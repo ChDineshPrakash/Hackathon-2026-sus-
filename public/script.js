@@ -140,14 +140,14 @@ function renderEmails() {
       <div class="email-entry ${email.priorityLevel}" data-id="${email.id}">
         <div class="entry-header">
           <div class="sender-info">
-            <div class="avatar-pro" style="background: ${getBrandColor(email.from)}"></div>
-            <span class="sender-name">${escapeHtml(email.from || 'External Signal')}</span>
+            <div class="avatar-pro" style="background: ${getBrandColor(email.from || email.sender)}"></div>
+            <span class="sender-name">${escapeHtml(email.from || email.sender || 'External Signal')}</span>
           </div>
           <span class="entry-badge badge-${email.priorityLevel}">${email.priorityLevel.toUpperCase()}</span>
         </div>
         
         <div class="entry-subject" onclick="window.open('https://mail.google.com/mail/u/0/#inbox/${email.id}', '_blank')">
-          ${escapeHtml(email.subject || 'Empty Header')}
+          ${escapeHtml(email.subject || email.header || 'Empty Header')}
         </div>
         
         <div class="entry-snippet">
