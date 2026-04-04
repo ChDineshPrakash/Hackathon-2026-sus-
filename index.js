@@ -2,6 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const path = require('path');
+require('dotenv').config();
+const { Redis } = require('@upstash/redis');
+
+// Initialize Redis client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 
 app.use(cors());
 app.use(express.json());
@@ -33,13 +41,13 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// Store priority emails in memory (Note: Vercel functions are stateless and clear after idle)
-let priorityEmails = [];
 // List of active SSE clients
 let clients = [];
+// Local fallback cache
+let localCache = [];
 
 // Webhook endpoint for n8n
-app.post('/api/alerts', (req, res) => {
+app.post('/api/alerts', async (req, res) => {
   const email = req.body;
 
   // Robustness check: Handle data types from n8n
@@ -51,11 +59,9 @@ app.post('/api/alerts', (req, res) => {
 
   if (typeof email.matchedKeywords === 'string') {
     try {
-      // Check if it's a JSON string array
       if (email.matchedKeywords.startsWith('[')) {
         email.matchedKeywords = JSON.parse(email.matchedKeywords);
       } else {
-        // Fallback to comma separation
         email.matchedKeywords = email.matchedKeywords.split(',').map(k => k.trim());
       }
     } catch (e) {
@@ -67,7 +73,7 @@ app.post('/api/alerts', (req, res) => {
   email.aiReasoning = email.aiReasoning || "AI analyzed context for priority detection.";
   email.summary = email.summary || email.snippet || "No summary provided.";
 
-  // Derived field: priorityLevel (needed by frontend)
+  // Derived field: priorityLevel
   if (!email.priorityLevel) {
     if (email.priorityScore >= 9) email.priorityLevel = 'critical';
     else if (email.priorityScore >= 7) email.priorityLevel = 'high';
@@ -77,9 +83,15 @@ app.post('/api/alerts', (req, res) => {
 
   console.log('📧 Received from n8n:', email.subject, '| Score:', email.priorityScore);
 
-  // Add to front of array
-  priorityEmails.unshift(email);
-  if (priorityEmails.length > 100) priorityEmails.pop();
+  try {
+    // Persist to Redis
+    await redis.lpush('emails', JSON.stringify(email));
+    await redis.ltrim('emails', 0, 199);
+  } catch (err) {
+    console.warn('⚠️ Redis write failed. Falling back to in-memory.', err.message);
+    localCache.unshift(email);
+    if (localCache.length > 100) localCache.pop();
+  }
 
   // Broadcast to all connected dashboard clients via SSE
   clients.forEach(client => client.response.write(`data: ${JSON.stringify(email)}\n\n`));
@@ -103,9 +115,19 @@ app.get('/api/events', (req, res) => {
   });
 });
 
-// Get all priority emails (for initial load)
-app.get('/api/emails', (req, res) => {
-  res.json(priorityEmails);
+// Get all priority emails (fetch from Redis)
+app.get('/api/emails', async (req, res) => {
+  try {
+    const emails = await redis.lrange('emails', 0, -1);
+    // Parse JSON strings back to objects
+    const parsedEmails = (emails || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
+    
+    // Combine with local cache if necessary (e.g., during Redis downtime)
+    res.json([...localCache, ...parsedEmails].slice(0, 200));
+  } catch (err) {
+    console.error('❌ Redis fetch failed:', err.message);
+    res.json(localCache);
+  }
 });
 
 // Catch-all for 404s
