@@ -1,5 +1,10 @@
 let emails = [];
+let filteredEmails = [];
 let notificationsEnabled = false;
+let currentSort = 'priority'; 
+let currentCategory = 'all';
+let searchQuery = '';
+let activityHistory = new Array(24).fill(0); // 24 hours of trend
 
 // DOM elements
 const emailContainer = document.getElementById('emailContainer');
@@ -7,132 +12,256 @@ const criticalCountSpan = document.getElementById('criticalCount');
 const highCountSpan = document.getElementById('highCount');
 const mediumCountSpan = document.getElementById('mediumCount');
 const enableBtn = document.getElementById('enableNotificationsBtn');
+const proFilters = document.querySelectorAll('.pro-filter');
+const proCategories = document.querySelectorAll('.pro-category');
+const connectionStatusText = document.getElementById('connectionStatus');
+const searchInput = document.getElementById('searchInput');
+const trendPath = document.getElementById('trendPath');
+const alertSound = document.getElementById('alertSound');
 
-// Use SSE (Server-Sent Events) for real-time updates (Vercel compatible)
-const eventSource = new EventSource('/api/events');
+// Use SSE (Server-Sent Events) for real-time updates
+let eventSource = new EventSource('/api/events');
+
+eventSource.onopen = () => {
+  if (connectionStatusText) {
+    connectionStatusText.innerText = 'SECURE CONNECT';
+    connectionStatusText.parentElement.style.opacity = '1';
+  }
+};
 
 eventSource.onmessage = (event) => {
   const email = JSON.parse(event.data);
   console.log('New priority signal received:', email);
   
-  // Add to front of local list
-  emails.unshift(email);
-  if (emails.length > 50) emails.pop();
-  
-  renderEmails();
-  
-  if (notificationsEnabled) {
-    showNotification(email);
+  if (!emails.find(e => e.id === email.id)) {
+    emails.push(email);
+    if (emails.length > 200) emails.shift();
+    
+    // Smooth Trend Update
+    activityHistory.push((activityHistory[activityHistory.length - 1] || 0) + 1);
+    activityHistory.shift();
+    updateTrendGraph();
+
+    sortAndFilter();
+    
+    if (notificationsEnabled) {
+      showNotification(email);
+    }
+
+    if (email.priorityLevel === 'critical' && alertSound) {
+      alertSound.currentTime = 0;
+      alertSound.play().catch(e => console.warn('Audio blocked'));
+    }
   }
 };
 
 eventSource.onerror = (err) => {
-  console.log('SSE connection status changed. EventSource will auto-reconnect.');
+  if (connectionStatusText) {
+    connectionStatusText.innerText = 'LINK DROPPED';
+    connectionStatusText.parentElement.style.opacity = '0.5';
+  }
 };
 
-// Initial load check (since SSE only sends NEW items)
+// Initial load check
 async function loadInitialEmails() {
   try {
     const res = await fetch('/api/emails');
     const data = await res.json();
     emails = data;
-    renderEmails();
+    // Mock smooth initial trend
+    activityHistory = activityHistory.map((_, i) => Math.floor(Math.sin(i / 3) * 5 + 10) + (emails.length / 5));
+    updateTrendGraph();
+    sortAndFilter();
   } catch (err) {
     console.error('Failed to fetch initial emails:', err);
   }
 }
 
-// Render the email list
+// Pro Trend Logic
+function updateTrendGraph() {
+  if (!trendPath) return;
+  const max = Math.max(...activityHistory, 10);
+  const width = 200;
+  const height = 80;
+  const step = width / (activityHistory.length - 1);
+  
+  const points = activityHistory.map((val, i) => {
+    const x = i * step;
+    const y = height - (val / max * height) - 5; // Offset from bottom
+    return `${x},${y}`;
+  });
+  
+  trendPath.setAttribute('d', `M${points.join(' L')}`);
+}
+
+// Elite Sorting & Filtering
+function sortAndFilter() {
+  filteredEmails = emails.filter(email => {
+    const matchesSearch = !searchQuery || 
+      email.subject?.toLowerCase().includes(searchQuery) || 
+      email.from?.toLowerCase().includes(searchQuery) || 
+      email.summary?.toLowerCase().includes(searchQuery);
+    
+    const matchesCategory = currentCategory === 'all' || 
+      email.category?.toLowerCase() === currentCategory ||
+      (currentCategory === 'urgency' && email.priorityLevel === 'critical');
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  if (currentSort === 'priority') {
+    filteredEmails.sort((a, b) => {
+      const scoreA = a.priorityScore || 0;
+      const scoreB = b.priorityScore || 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+    });
+  } else {
+    filteredEmails.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  }
+
+  renderEmails();
+}
+
+// Elite Rendering
 function renderEmails() {
-  if (emails.length === 0) {
+  if (filteredEmails.length === 0) {
     emailContainer.innerHTML = `
-      <div class="placeholder">
-        <svg style="margin-bottom: 1rem; opacity: 0.5" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/><path d="M12 12V3"/><path d="M9 6h6"/></svg>
-        <p>Listening for priority signals from n8n...</p>
+      <div class="placeholder pro-card" style="text-align: center; border-style: dashed; padding: 4rem;">
+        <p style="color: var(--text-dim); font-size: 0.9rem;">Intelligence Feed Empty</p>
       </div>`;
     updateStats();
     return;
   }
 
-  emailContainer.innerHTML = emails.map((email, index) => {
-    const isNew = index === 0 && emails.length > 1; // Animation for the newest item
+  emailContainer.innerHTML = filteredEmails.map((email) => {
+    const timeStr = new Date(email.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return `
-      <div class="email-card ${email.priorityLevel} ${isNew ? 'new-item-animation' : ''}" onclick="window.open('https://mail.google.com/mail/u/0/#inbox/${email.id}', '_blank')">
-        <div class="email-header">
-          <span class="email-from">📧 ${escapeHtml(email.from || 'Unknown')}</span>
-          <span class="email-badge badge-${email.priorityLevel}">${email.priorityLevel.toUpperCase()}</span>
-        </div>
-        <div class="email-subject">${escapeHtml(email.subject || 'No subject')}</div>
-        <div class="email-snippet">${escapeHtml(email.snippet || '')}</div>
-        <div class="email-meta">
-          <div class="keywords">
-            ${(email.matchedKeywords || []).map(k => `<span class="keyword-tag">${escapeHtml(k)}</span>`).join('')}
+      <div class="email-entry ${email.priorityLevel}" data-id="${email.id}">
+        <div class="entry-header">
+          <div class="sender-info">
+            <div class="avatar-pro" style="background: ${getBrandColor(email.from)}"></div>
+            <span class="sender-name">${escapeHtml(email.from || 'External Signal')}</span>
           </div>
-          <span>🕒 ${new Date(email.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span class="entry-badge badge-${email.priorityLevel}">${email.priorityLevel.toUpperCase()}</span>
+        </div>
+        
+        <div class="entry-subject" onclick="window.open('https://mail.google.com/mail/u/0/#inbox/${email.id}', '_blank')">
+          ${escapeHtml(email.subject || 'Empty Header')}
+        </div>
+        
+        <div class="entry-snippet">
+          ${escapeHtml(email.summary || email.snippet || '')}
+        </div>
+        
+        <div class="ai-reason-bar">
+          <b>AI Context</b> ${escapeHtml(email.aiReasoning)}
+        </div>
+
+        <div class="entry-footer">
+          <div class="tags-row">
+            ${(email.matchedKeywords || []).slice(0, 3).map(k => `<span class="entry-tag">#${escapeHtml(k)}</span>`).join('')}
+          </div>
+          <div style="display: flex; gap: 1rem; align-items: center;">
+            <span class="entry-time">${timeStr}</span>
+            <div class="email-actions" style="opacity: 0.4;">
+               <button class="dismiss-icon" style="background:none; border:none; color:white; cursor:pointer;" title="Archive">✕</button>
+            </div>
+          </div>
         </div>
       </div>
     `;
   }).join('');
   
+  // Interaction bindings
+  document.querySelectorAll('.dismiss-icon').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const card = btn.closest('.email-entry');
+      emails = emails.filter(email => email.id !== card.dataset.id);
+      sortAndFilter();
+    };
+  });
+
   updateStats();
 }
 
-// Update stat counters
-function updateStats() {
-  const critical = emails.filter(e => e.priorityLevel === 'critical').length;
-  const high = emails.filter(e => e.priorityLevel === 'high').length;
-  const medium = emails.filter(e => e.priorityLevel === 'medium').length;
-  criticalCountSpan.innerText = critical;
-  highCountSpan.innerText = high;
-  mediumCountSpan.innerText = medium;
+function getBrandColor(from) {
+  const colors = ['#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#10b981'];
+  if (!from) return colors[0];
+  const idx = from.charCodeAt(0) % colors.length;
+  return colors[idx];
 }
 
-// Send browser notification
+function updateStats() {
+  const counts = { critical: 0, high: 0, medium: 0 };
+  emails.forEach(e => {
+    if (counts[e.priorityLevel] !== undefined) counts[e.priorityLevel]++;
+  });
+  if (criticalCountSpan) criticalCountSpan.innerText = counts.critical;
+  if (highCountSpan) highCountSpan.innerText = counts.high;
+  if (mediumCountSpan) mediumCountSpan.innerText = counts.medium;
+}
+
+// Pro Filter Controls
+proFilters.forEach(btn => {
+  btn.onclick = () => {
+    proFilters.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSort = btn.dataset.filter;
+    sortAndFilter();
+  };
+});
+
+proCategories.forEach(btn => {
+  btn.onclick = () => {
+    proCategories.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCategory = btn.dataset.category;
+    sortAndFilter();
+  };
+});
+
+if (searchInput) {
+  searchInput.oninput = (e) => {
+    searchQuery = e.target.value.toLowerCase();
+    sortAndFilter();
+  };
+}
+
+// Notifications
 function showNotification(email) {
-  if (email.priorityLevel === 'critical' || email.priorityLevel === 'high') {
-    new Notification(`⚠️ Priority Email from ${email.from}`, {
+  if (email.priorityLevel === 'critical') {
+    new Notification(`Intel Alert: ${email.from}`, {
       body: email.subject,
-      icon: 'https://www.gmail.com/favicon.ico',
-      requireInteraction: email.priorityLevel === 'critical',
-      silent: false
+      icon: 'https://www.google.com/gmail/about/static-2020/images/favicon.ico'
     });
   }
 }
 
-// Request notification permission
-enableBtn.addEventListener('click', async () => {
-  if ('Notification' in window) {
-    const permission = await Notification.requestPermission();
-    notificationsEnabled = permission === 'granted';
-    if (notificationsEnabled) {
-      enableBtn.innerText = '✅ Notifications Enabled';
-      enableBtn.style.background = '#28a745';
-      new Notification('PriorityMail', { body: 'You will now receive alerts for critical emails!' });
-    } else {
-      enableBtn.innerText = '🔔 Notifications Blocked';
+if (enableBtn) {
+  enableBtn.onclick = async () => {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      notificationsEnabled = permission === 'granted';
+      if (notificationsEnabled) {
+        enableBtn.innerHTML = '✅ INTEL ACTIVE';
+        enableBtn.style.opacity = '0.7';
+      }
     }
-  } else {
-    alert('Your browser does not support notifications');
-  }
-});
+  };
+}
 
 // Helper to escape HTML
 function escapeHtml(str) {
   if (!str) return '';
-  return str.replace(/[&<>]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    return m;
-  });
+  return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
 }
 
-// Initial load
+// Init
 loadInitialEmails();
 
-// Auto-check if notifications are already granted
 if ('Notification' in window && Notification.permission === 'granted') {
   notificationsEnabled = true;
-  enableBtn.innerText = '✅ Notifications Enabled';
-  enableBtn.style.background = '#28a745';
+  if (enableBtn) enableBtn.innerHTML = '✅ INTEL ACTIVE';
 }

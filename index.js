@@ -41,12 +41,14 @@ let clients = [];
 // Webhook endpoint for n8n
 app.post('/api/alerts', (req, res) => {
   const email = req.body;
-  
+
   // Robustness check: Handle data types from n8n
   if (typeof email.priorityScore === 'string') {
     email.priorityScore = parseInt(email.priorityScore, 10) || 5;
+  } else if (typeof email.priorityScore !== 'number') {
+    email.priorityScore = 5;
   }
-  
+
   if (typeof email.matchedKeywords === 'string') {
     try {
       // Check if it's a JSON string array
@@ -56,10 +58,14 @@ app.post('/api/alerts', (req, res) => {
         // Fallback to comma separation
         email.matchedKeywords = email.matchedKeywords.split(',').map(k => k.trim());
       }
-    } catch(e) {
+    } catch (e) {
       email.matchedKeywords = [email.matchedKeywords];
     }
   }
+
+  // AI Insights
+  email.aiReasoning = email.aiReasoning || "AI analyzed context for priority detection.";
+  email.summary = email.summary || email.snippet || "No summary provided.";
 
   // Derived field: priorityLevel (needed by frontend)
   if (!email.priorityLevel) {
@@ -70,14 +76,14 @@ app.post('/api/alerts', (req, res) => {
   }
 
   console.log('📧 Received from n8n:', email.subject, '| Score:', email.priorityScore);
-  
+
   // Add to front of array
   priorityEmails.unshift(email);
   if (priorityEmails.length > 100) priorityEmails.pop();
-  
+
   // Broadcast to all connected dashboard clients via SSE
   clients.forEach(client => client.response.write(`data: ${JSON.stringify(email)}\n\n`));
-  
+
   res.status(200).json({ status: 'received', id: email.id });
 });
 
