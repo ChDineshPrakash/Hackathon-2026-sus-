@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PriorityMail – Live AI Inbox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="status-badge">
+        <span class="status-dot pulse"></span>
+        LIVE TRACKING ACTIVE
+      </div>
+      <h1>PriorityMail Dashboard</h1>
+      <p>AI-powered priority filters for your professional life.</p>
+      <button id="enableNotificationsBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        Enable Browser Alerts
+      </button>
+    </header>
+
+    <div class="stats">
+      <div class="stat-card">
+        <h3>Critical</h3>
+        <span id="criticalCount">0</span>
+      </div>
+      <div class="stat-card">
+        <h3>High Priority</h3>
+        <span id="highCount">0</span>
+      </div>
+      <div class="stat-card">
+        <h3>Medium Priority</h3>
+        <span id="mediumCount">0</span>
+      </div>
+    </div>
+
+    <div class="email-list">
+      <h2>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        Priority Feed
+      </h2>
+      <div id="emailContainer">
+        <div class="placeholder">
+          <svg style="margin-bottom: 1rem; opacity: 0.5" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/><path d="M12 12V3"/><path d="M9 6h6"/></svg>
+          <p>Listening for priority signals from n8n...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
