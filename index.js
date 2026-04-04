@@ -118,15 +118,34 @@ app.get('/api/events', (req, res) => {
 // Get all priority emails (fetch from Redis)
 app.get('/api/emails', async (req, res) => {
   try {
+    console.log('📬 Fetching emails from Redis...');
     const emails = await redis.lrange('emails', 0, -1);
-    // Parse JSON strings back to objects
-    const parsedEmails = (emails || []).map(e => typeof e === 'string' ? JSON.parse(e) : e);
+    console.log(`📦 Found ${emails?.length || 0} items in Redis.`);
     
-    // Combine with local cache if necessary (e.g., during Redis downtime)
+    // Parse JSON strings back to objects
+    const parsedEmails = (emails || []).map(e => {
+      try {
+        return typeof e === 'string' ? JSON.parse(e) : e;
+      } catch(v) {
+        console.error('❌ JSON Parse error on item:', e);
+        return null;
+      }
+    }).filter(e => e !== null);
+    
     res.json([...localCache, ...parsedEmails].slice(0, 200));
   } catch (err) {
     console.error('❌ Redis fetch failed:', err.message);
     res.json(localCache);
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    const ping = await redis.ping();
+    res.json({ status: 'ok', redis: ping, env: !!process.env.UPSTASH_REDIS_REST_URL });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
   }
 });
 
