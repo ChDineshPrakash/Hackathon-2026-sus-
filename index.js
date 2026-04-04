@@ -78,8 +78,8 @@ function normalizeEmail(raw) {
   return normalized;
 }
 
-// Webhook endpoint for n8n
-app.post('/api/alerts', async (req, res) => {
+// Webhook endpoint for n8n (Universal Aliases: /api/alerts, /api/alert, /pipeline)
+app.post(['/api/alerts', '/api/alert', '/pipeline'], async (req, res) => {
   try {
     const rawData = req.body;
     console.log('📬 RECV:', JSON.stringify(rawData, null, 2)); // ELITE DEBUG LOGGING
