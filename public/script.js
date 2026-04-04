@@ -1,4 +1,3 @@
-const socket = io();
 let emails = [];
 let notificationsEnabled = false;
 
@@ -9,11 +8,38 @@ const highCountSpan = document.getElementById('highCount');
 const mediumCountSpan = document.getElementById('mediumCount');
 const enableBtn = document.getElementById('enableNotificationsBtn');
 
-// Load initial emails from server
-async function loadEmails() {
-  const response = await fetch('/api/emails');
-  emails = await response.json();
+// Use SSE (Server-Sent Events) for real-time updates (Vercel compatible)
+const eventSource = new EventSource('/api/events');
+
+eventSource.onmessage = (event) => {
+  const email = JSON.parse(event.data);
+  console.log('New priority signal received:', email);
+  
+  // Add to front of local list
+  emails.unshift(email);
+  if (emails.length > 50) emails.pop();
+  
   renderEmails();
+  
+  if (notificationsEnabled) {
+    showNotification(email);
+  }
+};
+
+eventSource.onerror = (err) => {
+  console.log('SSE connection status changed. EventSource will auto-reconnect.');
+};
+
+// Initial load check (since SSE only sends NEW items)
+async function loadInitialEmails() {
+  try {
+    const res = await fetch('/api/emails');
+    const data = await res.json();
+    emails = data;
+    renderEmails();
+  } catch (err) {
+    console.error('Failed to fetch initial emails:', err);
+  }
 }
 
 // Render the email list
@@ -62,9 +88,7 @@ function updateStats() {
 }
 
 // Send browser notification
-function sendNotification(email) {
-  if (!notificationsEnabled) return;
-  
+function showNotification(email) {
   if (email.priorityLevel === 'critical' || email.priorityLevel === 'high') {
     new Notification(`⚠️ Priority Email from ${email.from}`, {
       body: email.subject,
@@ -74,22 +98,6 @@ function sendNotification(email) {
     });
   }
 }
-
-// Socket.io: receive new email from n8n
-socket.on('new-email', (email) => {
-  console.log('New priority email:', email);
-  emails.unshift(email);
-  if (emails.length > 100) emails.pop();
-  renderEmails();
-  sendNotification(email);
-  
-  // Optional: play a subtle sound for critical
-  if (email.priorityLevel === 'critical' && notificationsEnabled) {
-    const audio = new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3');
-    audio.volume = 0.3;
-    audio.play().catch(e => console.log('Audio not allowed'));
-  }
-});
 
 // Request notification permission
 enableBtn.addEventListener('click', async () => {
@@ -120,7 +128,7 @@ function escapeHtml(str) {
 }
 
 // Initial load
-loadEmails();
+loadInitialEmails();
 
 // Auto-check if notifications are already granted
 if ('Notification' in window && Notification.permission === 'granted') {

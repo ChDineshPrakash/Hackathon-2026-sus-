@@ -1,17 +1,19 @@
 const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
 const cors = require('cors');
-
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: { origin: "*" }
-});
+const path = require('path');
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+// Ensure static files are served correctly from the public directory
+const publicPath = path.join(process.cwd(), 'public');
+console.log('📂 Serving static files from:', publicPath);
+app.use(express.static(publicPath));
+
+// Explicit root route for Vercel
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'));
+});
 
 // Simple request logger
 app.use((req, res, next) => {
@@ -31,8 +33,10 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// Store priority emails in memory (max 100)
+// Store priority emails in memory (Note: Vercel functions are stateless and clear after idle)
 let priorityEmails = [];
+// List of active SSE clients
+let clients = [];
 
 // Webhook endpoint for n8n
 app.post('/api/alerts', (req, res) => {
@@ -69,13 +73,28 @@ app.post('/api/alerts', (req, res) => {
   
   // Add to front of array
   priorityEmails.unshift(email);
-  // Keep only last 100
   if (priorityEmails.length > 100) priorityEmails.pop();
   
-  // Broadcast to all connected dashboard clients
-  io.emit('new-email', email);
+  // Broadcast to all connected dashboard clients via SSE
+  clients.forEach(client => client.response.write(`data: ${JSON.stringify(email)}\n\n`));
   
   res.status(200).json({ status: 'received', id: email.id });
+});
+
+// SSE Events endpoint for real-time updates
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const clientId = Date.now();
+  const newClient = { id: clientId, response: res };
+  clients.push(newClient);
+
+  req.on('close', () => {
+    clients = clients.filter(client => client.id !== clientId);
+  });
 });
 
 // Get all priority emails (for initial load)
@@ -89,8 +108,13 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found. Try POSTing to /api/alerts' });
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 Antigravity dashboard running on http://localhost:${PORT}`);
-});
+// Start server only when run directly (local)
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Antigravity dashboard running on http://localhost:${PORT}`);
+  });
+}
+
+// Export the app for Vercel's serverless handler
+module.exports = app;
