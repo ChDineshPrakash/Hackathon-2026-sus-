@@ -1,10 +1,7 @@
 {
   "version": 2,
   "routes": [
-    { "src": "/api/events", "dest": "/api/server.js" },
-    { "src": "/api/alerts", "dest": "/api/server.js" },
-    { "src": "/api/emails", "dest": "/api/server.js" },
-    { "src": "/api/(.*)", "dest": "/api/server.js" },
-    { "src": "/(.*)", "dest": "/public/$1" }
+    { "src": "/api/(.*)", "dest": "/index.js" },
+    { "src": "/(.*)", "dest": "/$1" }
   ]
 }

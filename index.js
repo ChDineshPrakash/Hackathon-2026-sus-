@@ -5,13 +5,13 @@ const path = require('path');
 
 app.use(cors());
 app.use(express.json());
-// Ensure static files are served correctly from the public directory
-const publicPath = path.join(process.cwd(), 'public');
+// Robust static file serving for Vercel
+const publicPath = path.resolve(__dirname, 'public');
 console.log('📂 Serving static files from:', publicPath);
 app.use(express.static(publicPath));
 
-// Explicit root route for Vercel
-app.get('/', (req, res) => {
+// Explicit root route for Vercel (serves index.html for BOTH / and /index.html)
+app.get(['/', '/index.html'], (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'));
 });
 
