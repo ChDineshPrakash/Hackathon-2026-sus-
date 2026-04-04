@@ -125,6 +125,9 @@ function sortAndFilter() {
 
 // Elite Rendering
 function renderEmails() {
+  console.log('💎 Elite Data Sync:', filteredEmails.length, 'signals');
+  if (filteredEmails.length > 0) console.table(filteredEmails.slice(0, 5));
+
   if (filteredEmails.length === 0) {
     emailContainer.innerHTML = `
       <div class="placeholder pro-card" style="text-align: center; border-style: dashed; padding: 4rem;">

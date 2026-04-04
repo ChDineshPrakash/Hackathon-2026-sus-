@@ -47,59 +47,69 @@ let clients = [];
 let localCache = [];
 
 // Webhook endpoint for n8n
+// Helper to strictly normalize various incoming data patterns from n8n/other sources
+function normalizeEmail(raw) {
+  const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  const normalized = { ...data };
+
+  // 1. Case-insensitive normalization for Subject/Header
+  normalized.subject = data.subject || data.Subject || data.header || data.Header || data.title || "Elite Signal Header";
+
+  // 2. Case-insensitive normalization for Sender/From
+  normalized.from = data.from || data.From || data.sender || data.Sender || data.sender_name || "External Command";
+
+  // 3. Robust Summary detection
+  normalized.summary = data.summary || data.Summary || data.snippet || data.body || data.text || "Operational brief under analysis...";
+  
+  // 4. Force AI insights if missing
+  normalized.aiReasoning = data.aiReasoning || data.reasoning || "AI analyzed context for priority detection.";
+
+  // 5. Ensure priorityLevel exists
+  if (!data.priorityLevel) {
+    const score = parseInt(data.priorityScore || 5, 10);
+    if (score >= 9) normalized.priorityLevel = 'critical';
+    else if (score >= 7) normalized.priorityLevel = 'high';
+    else if (score >= 4) normalized.priorityLevel = 'medium';
+    else normalized.priorityLevel = 'low';
+  } else {
+    normalized.priorityLevel = data.priorityLevel.toLowerCase();
+  }
+
+  return normalized;
+}
+
+// Webhook endpoint for n8n
 app.post('/api/alerts', async (req, res) => {
-  const email = req.body;
-
-  // Robustness check: Handle data types from n8n
-  if (typeof email.priorityScore === 'string') {
-    email.priorityScore = parseInt(email.priorityScore, 10) || 5;
-  } else if (typeof email.priorityScore !== 'number') {
-    email.priorityScore = 5;
-  }
-
-  if (typeof email.matchedKeywords === 'string') {
-    try {
-      if (email.matchedKeywords.startsWith('[')) {
-        email.matchedKeywords = JSON.parse(email.matchedKeywords);
-      } else {
-        email.matchedKeywords = email.matchedKeywords.split(',').map(k => k.trim());
-      }
-    } catch (e) {
-      email.matchedKeywords = [email.matchedKeywords];
-    }
-  }
-
-  if (email.header && !email.subject) email.subject = email.header;
-  if (email.sender && !email.from) email.from = email.sender;
-
-  // AI Insights
-  email.aiReasoning = email.aiReasoning || "AI analyzed context for priority detection.";
-  email.summary = email.summary || email.snippet || "No summary provided.";
-
-  // Derived field: priorityLevel
-  if (!email.priorityLevel) {
-    if (email.priorityScore >= 9) email.priorityLevel = 'critical';
-    else if (email.priorityScore >= 7) email.priorityLevel = 'high';
-    else if (email.priorityScore >= 4) email.priorityLevel = 'medium';
-    else email.priorityLevel = 'low';
-  }
-
-  console.log('📧 Received from n8n:', email.subject, '| Score:', email.priorityScore);
-
   try {
-    // Persist to Redis
+    const rawData = req.body;
+    console.log('📬 RECV:', JSON.stringify(rawData, null, 2)); // ELITE DEBUG LOGGING
+
+    // Normalize the data into the standard Obsidian format
+    const email = normalizeEmail(rawData);
+    
+    // Matched keywords handling
+    if (typeof email.matchedKeywords === 'string') {
+      try {
+        email.matchedKeywords = email.matchedKeywords.startsWith('[') ? JSON.parse(email.matchedKeywords) : email.matchedKeywords.split(',').map(k => k.trim());
+      } catch (e) {
+        email.matchedKeywords = [email.matchedKeywords];
+      }
+    }
+
+    console.log('📧 Mapped:', email.subject, '| From:', email.from);
+
+    // Persist standard object to Redis
     await redis.lpush('emails', JSON.stringify(email));
     await redis.ltrim('emails', 0, 199);
+    
+    // Broadcast via SSE
+    clients.forEach(client => client.response.write(`data: ${JSON.stringify(email)}\n\n`));
+    
+    res.status(200).json({ status: 'received', id: email.id });
   } catch (err) {
-    console.warn('⚠️ Redis write failed. Falling back to in-memory.', err.message);
-    localCache.unshift(email);
-    if (localCache.length > 100) localCache.pop();
+    console.error('❌ Hook Error:', err.message);
+    res.status(500).json({ status: 'error', message: err.message });
   }
-
-  // Broadcast to all connected dashboard clients via SSE
-  clients.forEach(client => client.response.write(`data: ${JSON.stringify(email)}\n\n`));
-
-  res.status(200).json({ status: 'received', id: email.id });
 });
 
 // SSE Events endpoint for real-time updates
