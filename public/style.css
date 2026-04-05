@@ -184,7 +184,7 @@ header p {
   grid-area: main;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
 .feed-controls {
@@ -243,8 +243,8 @@ header p {
   position: relative;
   background: var(--glass-bg);
   border: 1px solid var(--border-muted);
-  border-radius: var(--radius-lg);
-  padding: 1.75rem;
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
   transition: all 0.4s var(--transition-pro);
   cursor: pointer;
   animation: fadeInPro 0.6s var(--transition-pro);
@@ -271,7 +271,7 @@ header p {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .sender-info { display: flex; align-items: center; gap: 0.75rem; }
@@ -292,18 +292,18 @@ header p {
 .badge-high { background: rgba(251, 191, 36, 0.1); color: #fde68a; border: 1px solid rgba(251, 191, 36, 0.2); }
 
 .entry-subject {
-  font-size: 1.125rem;
-  font-weight: 500;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--text-main);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.2rem;
   letter-spacing: -0.01em;
 }
 
 .entry-snippet {
   color: var(--text-dim);
-  font-size: 0.925rem;
-  line-height: 1.5;
-  margin-bottom: 1.25rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -313,11 +313,11 @@ header p {
 .ai-reason-bar {
   background: rgba(99, 102, 241, 0.03);
   border-left: 2px solid var(--brand-primary);
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--text-main);
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.75rem;
 }
 
 .ai-reason-bar b { color: var(--brand-primary); text-transform: uppercase; font-size: 0.7rem; margin-right: 0.5rem; font-weight: 700; letter-spacing: 0.05em; }
@@ -326,8 +326,8 @@ header p {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border-muted);
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .tags-row { display: flex; gap: 0.5rem; }
