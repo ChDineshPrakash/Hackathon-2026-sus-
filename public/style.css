@@ -238,6 +238,23 @@ header p {
 
 .pill-btn.active { background: white; color: var(--midnight); font-weight: 600; }
 
+.sync-btn {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: var(--brand-primary) !important;
+  margin-right: 0.5rem;
+}
+
+.sync-btn:hover { background: rgba(255, 255, 255, 0.1) !important; }
+
+.syncing {
+  animation: spin 1s linear infinite;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
 /* Email Cards - Elite Design */
 .email-entry {
   position: relative;

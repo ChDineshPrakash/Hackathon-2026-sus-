@@ -264,6 +264,19 @@ function escapeHtml(str) {
 // Init
 loadInitialEmails();
 
+const refreshBtn = document.getElementById('refreshBtn');
+if (refreshBtn) {
+  refreshBtn.addEventListener('click', async () => {
+    refreshBtn.classList.add('syncing');
+    refreshBtn.innerText = '🔄 SYNCING...';
+    await loadInitialEmails();
+    setTimeout(() => {
+      refreshBtn.classList.remove('syncing');
+      refreshBtn.innerText = '🔄 SYNC';
+    }, 1000);
+  });
+}
+
 if ('Notification' in window && Notification.permission === 'granted') {
   notificationsEnabled = true;
   if (enableBtn) enableBtn.innerHTML = '✅ INTEL ACTIVE';
